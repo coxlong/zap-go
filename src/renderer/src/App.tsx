@@ -1,35 +1,30 @@
-import Versions from './components/Versions'
-import electronLogo from './assets/electron.svg'
+import React, { useEffect } from 'react'
+import { MainWindow } from './components/MainWindow'
+import { commandManager } from './plugins/manager'
+import { TimePlugin, AIPlugin, BaseCommand } from './plugins'
 
-function App(): React.JSX.Element {
-  const ipcHandle = (): void => window.electron.ipcRenderer.send('ping')
+const App: React.FC = () => {
+  useEffect(() => {
+    // 创建插件实例
+    const timePlugin = new TimePlugin()
+    const aiPlugin = new AIPlugin()
 
-  return (
-    <>
-      <img alt="logo" className="logo" src={electronLogo} />
-      <div className="creator">Powered by electron-vite</div>
-      <div className="text">
-        Build an Electron app with <span className="react">React</span>
-        &nbsp;and <span className="ts">TypeScript</span>
-      </div>
-      <p className="tip">
-        Please try pressing <code>F12</code> to open the devTool
-      </p>
-      <div className="actions">
-        <div className="action">
-          <a href="https://electron-vite.org/" target="_blank" rel="noreferrer">
-            Documentation
-          </a>
-        </div>
-        <div className="action">
-          <a target="_blank" rel="noreferrer" onClick={ipcHandle}>
-            Send IPC
-          </a>
-        </div>
-      </div>
-      <Versions></Versions>
-    </>
-  )
+    // 注册命令（一个插件可以创建多个命令）
+    commandManager.registerCommand(
+      new BaseCommand(timePlugin, {
+        triggers: ['time', '时间']
+      })
+    )
+
+    // 设置兜底命令
+    commandManager.setFallbackCommand(
+      new BaseCommand(aiPlugin, {
+        triggers: ['fallback']
+      })
+    )
+  }, [])
+
+  return <MainWindow />
 }
 
 export default App

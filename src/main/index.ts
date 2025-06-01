@@ -1,27 +1,121 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, globalShortcut, screen } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 function createWindow(): void {
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
+
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+  const searchWindow = new BrowserWindow({
+    width: 600, // 调整为更合适的宽度
+    height: 380, // 初始高度
+    // minHeight: 80,
+    // maxHeight: 500, // 最大高度限制
+    useContentSize: true,
+    frame: false, // 无边框
+    transparent: false, // 透明背景
+    alwaysOnTop: true, // 始终置顶
+    skipTaskbar: true, // 不在任务栏显示
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
     show: false,
+    focusable: true,
     autoHideMenuBar: true,
+    x: Math.round((screenWidth - 600) / 2),
+    y: Math.round(screenHeight * 0.25),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  const showSearchWindow = (): void => {
+    // 重新居中窗口
+    const { width: currentScreenWidth } = screen.getPrimaryDisplay().workAreaSize
+    const [windowWidth] = searchWindow.getSize()
+    searchWindow.setPosition(
+      Math.round((currentScreenWidth - windowWidth) / 2),
+      Math.round(screenHeight * 0.25)
+    )
+
+    searchWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    searchWindow.show()
+    searchWindow.focus()
+  }
+
+  const hideSearchWindow = (): void => {
+    searchWindow.hide()
+  }
+
+  const toggleSearchWindow = (): void => {
+    if (searchWindow.isVisible()) {
+      hideSearchWindow()
+    } else {
+      showSearchWindow()
+    }
+  }
+
+  // 监听来自渲染进程的高度调整请求
+  ipcMain.on('resize-window', (_, __, newHeight: number) => {
+    const [currentWidth] = searchWindow.getSize()
+    const maxHeight = 500
+    const minHeight = 80
+
+    // 限制高度在合理范围内
+    const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight))
+    console.log('### sssize', newHeight, clampedHeight)
+
+    searchWindow.setSize(currentWidth, clampedHeight)
+
+    // 保持窗口居中
+    const { width: currentScreenWidth } = screen.getPrimaryDisplay().workAreaSize
+    searchWindow.setPosition(
+      Math.round((currentScreenWidth - currentWidth) / 2),
+      Math.round(screenHeight * 0.25)
+    )
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  searchWindow.on('ready-to-show', () => {
+    const toggleShortcutKeys = process.platform === 'darwin' ? 'Option+Space' : 'Alt+Space'
+    const hideShortcutKeys = 'Escape'
+
+    const toggleSearchShortcut = globalShortcut.register(toggleShortcutKeys, () => {
+      setTimeout(() => {
+        toggleSearchWindow()
+      }, 0)
+    })
+
+    const hideSearchShortcut = globalShortcut.register(hideShortcutKeys, () => {
+      if (searchWindow.isFocused()) {
+        hideSearchWindow()
+      }
+    })
+
+    if (!toggleSearchShortcut) {
+      console.error(
+        `[Shortcut Registration Failed] Toggle search window shortcut not registered: ${toggleShortcutKeys}`
+      )
+    }
+
+    if (!hideSearchShortcut) {
+      console.error(
+        `[Shortcut Registration Failed] Hide search window shortcut not registered: ${hideShortcutKeys}`
+      )
+    }
+    if (!app.isPackaged) {
+      searchWindow.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
+  searchWindow.on('blur', () => hideSearchWindow())
+
+  searchWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
@@ -29,9 +123,9 @@ function createWindow(): void {
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    searchWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    searchWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
@@ -40,7 +134,7 @@ function createWindow(): void {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.zapgo')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
