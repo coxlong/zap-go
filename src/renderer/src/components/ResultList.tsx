@@ -40,7 +40,7 @@ export const ResultList: React.FC<ResultListProps> = ({
       {showSuggestions && (
         <div
           ref={suggestionsContainerRef}
-          className="top-full left-0 right-0 mt-3 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 max-h-80 overflow-y-auto animate-in slide-in-from-top-2 duration-300"
+          className="top-full left-0 right-0 mt-3 bg-white rounded-2xl shadow-xl border border-slate-100 p-2 z-50 max-h-80 overflow-y-auto animate-in slide-in-from-top-2 duration-300 custom-scrollbar"
         >
           {suggestions.map((suggestion, index) => (
             <button

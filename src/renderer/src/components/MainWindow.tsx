@@ -142,57 +142,6 @@ export const MainWindow: React.FC = () => {
         </div>
         <div className="text-sm text-slate-500">{commandManager.getCommands().length}命令</div>
       </div>
-
-      <style jsx="true">{`
-        /* 自定义动画 */
-        @keyframes slide-in-from-top {
-          from {
-            opacity: 0;
-            transform: translateY(-8px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes slide-in-from-bottom {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .animate-in {
-          animation-fill-mode: both;
-        }
-        .slide-in-from-top-2 {
-          animation: slide-in-from-top 0.2s ease-out;
-        }
-        .slide-in-from-bottom-2 {
-          animation: slide-in-from-bottom 0.3s ease-out;
-        }
-        /* 滚动条样式 */
-        .results-container::-webkit-scrollbar,
-        div::-webkit-scrollbar {
-          width: 6px;
-        }
-        .results-container::-webkit-scrollbar-track,
-        div::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .results-container::-webkit-scrollbar-thumb,
-        div::-webkit-scrollbar-thumb {
-          background: rgba(148, 163, 184, 0.3);
-          border-radius: 3px;
-        }
-        .results-container::-webkit-scrollbar-thumb:hover,
-        div::-webkit-scrollbar-thumb:hover {
-          background: rgba(148, 163, 184, 0.5);
-        }
-      `}</style>
     </div>
   )
 }
