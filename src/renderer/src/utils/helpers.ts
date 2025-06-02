@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-export const useAutoResize = (containerRef: React.RefObject<HTMLElement>): void => {
+export const useAutoResize = (containerRef: React.RefObject<HTMLElement | null>): void => {
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
   const debounceTimerRef = useRef<number | undefined>(undefined)
 

@@ -51,38 +51,22 @@ export const ResultList: React.FC<ResultListProps> = ({
               }`}
               onClick={() => onSuggestionSelect(index)}
             >
-              {suggestion.type === 'command' && suggestion.command ? (
-                <>
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg">
-                    {suggestion.command.icon}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-slate-800">
-                        {suggestion.command.name}
-                      </span>
-                      <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-md font-mono">
-                        {suggestion.command.triggers[0]}
-                      </span>
-                    </div>
-                    <div className="text-sm text-slate-500">{suggestion.command.description}</div>
-                  </div>
-                  {suggestion.command.params.length > 0 && (
-                    <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md">
-                      {suggestion.command.params.length}参数
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600">
-                    ⇥
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-slate-800">{suggestion.value}</div>
-                    <div className="text-sm text-slate-500">参数: {suggestion.paramName}</div>
-                  </div>
-                </>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg">
+                {suggestion.command.icon}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-slate-800">{suggestion.command.name}</span>
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-md font-mono">
+                    {suggestion.command.triggers[0]}
+                  </span>
+                </div>
+                <div className="text-sm text-slate-500">{suggestion.command.description}</div>
+              </div>
+              {suggestion.command.plugin.params.length > 0 && (
+                <span className="text-xs bg-emerald-100 text-emerald-600 px-2 py-1 rounded-md">
+                  {suggestion.command.plugin.params.length}参数
+                </span>
               )}
             </button>
           ))}

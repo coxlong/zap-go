@@ -16,21 +16,30 @@ export class CommandManager {
     return [...this.commands]
   }
 
-  findMatchingCommand(input: string): Command | null {
+  clearCommands(): void {
+    this.commands = []
+    this.fallbackCommand = null
+  }
+
+  findMatchingCommand(input: string): {
+    command: Command | null
+    type: 'fallback' | 'exactMatch' | 'prefixMatch'
+  } {
     const trigger = input.trim().split(/\s+/)[0].toLowerCase()
 
     // 精确匹配
     const exactMatch = this.commands.find((command) =>
       command.triggers.some((t) => t.toLowerCase() === trigger)
     )
-    if (exactMatch) return exactMatch
+    if (exactMatch) return { command: exactMatch, type: 'exactMatch' }
 
     // 前缀匹配
-    return (
-      this.commands.find((command) =>
-        command.triggers.some((t) => t.toLowerCase().startsWith(trigger))
-      ) || this.fallbackCommand
+    const prefixMatch = this.commands.find((command) =>
+      command.triggers.some((t) => t.toLowerCase().startsWith(trigger))
     )
+    if (prefixMatch) return { command: prefixMatch, type: 'prefixMatch' }
+
+    return { command: this.fallbackCommand, type: 'fallback' }
   }
 
   // TODO: 未来可以扩展的功能

@@ -9,12 +9,10 @@ export const MainWindow: React.FC = () => {
   const [isInputFocused, setIsInputFocused] = useState(false)
   const mainContainerRef = useRef<HTMLDivElement>(null)
 
-  // 使用搜索hook
   const {
     inputValue,
     setInputValue,
     autoSuggestion,
-    suggestionDisplayText,
     suggestions,
     selectedSuggestionIndex,
     setSelectedSuggestionIndex,
@@ -31,7 +29,6 @@ export const MainWindow: React.FC = () => {
     selectSuggestion
   } = useSearch()
 
-  // 使用自动调整窗口大小hook
   useAutoResize(mainContainerRef)
 
   // 键盘事件处理
@@ -146,7 +143,7 @@ export const MainWindow: React.FC = () => {
         <div className="text-sm text-slate-500">{commandManager.getCommands().length}命令</div>
       </div>
 
-      <style jsx>{`
+      <style jsx="true">{`
         /* 自定义动画 */
         @keyframes slide-in-from-top {
           from {

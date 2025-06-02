@@ -1,9 +1,12 @@
-import { app, shell, BrowserWindow, ipcMain, globalShortcut, screen } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, globalShortcut, screen, Tray, Menu } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import icon25 from '../../resources/icon25.png?asset'
+import { promises as fs } from 'fs'
+import { homedir } from 'os'
 
-function createWindow(): void {
+function createSearchWindow(): void {
   const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
 
   // Create the browser window.
@@ -34,6 +37,103 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  let tray: Tray | null = null
+  const createTray = (): void => {
+    tray = new Tray(icon25)
+    tray.setToolTip('Zap Go - 快速启动器')
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '显示主窗口',
+        click: () => {
+          showSearchWindow()
+        }
+      },
+      {
+        label: '打开配置',
+        click: () => {
+          createConfigWindow()
+        }
+      },
+      { type: 'separator' },
+      {
+        label: '关于',
+        click: () => {}
+      },
+      { type: 'separator' },
+      {
+        label: '退出',
+        click: () => {
+          globalShortcut.unregisterAll()
+          app.quit()
+        }
+      }
+    ])
+    tray.setContextMenu(contextMenu)
+    tray.on('double-click', () => {
+      showSearchWindow()
+    })
+
+    if (process.platform !== 'darwin') {
+      tray.on('click', () => {
+        showSearchWindow()
+      })
+    }
+  }
+
+  // 创建配置窗口
+  let configWindow: BrowserWindow | null = null
+
+  const createConfigWindow = (): void => {
+    if (configWindow) {
+      configWindow.focus()
+      return
+    }
+
+    configWindow = new BrowserWindow({
+      width: 800,
+      height: 600,
+      minWidth: 600,
+      minHeight: 400,
+      frame: true,
+      transparent: false,
+      alwaysOnTop: false,
+      skipTaskbar: false,
+      resizable: true,
+      movable: true,
+      minimizable: true,
+      maximizable: true,
+      show: false,
+      focusable: true,
+      autoHideMenuBar: true,
+      center: true,
+      title: 'Zap Go - 配置设置',
+      ...(process.platform === 'linux' ? { icon } : {}),
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false
+      }
+    })
+
+    configWindow.on('ready-to-show', () => {
+      configWindow?.show()
+      if (!app.isPackaged) {
+        configWindow?.webContents.openDevTools({ mode: 'detach' })
+      }
+    })
+
+    configWindow.on('closed', () => {
+      configWindow = null
+    })
+
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      configWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/config`)
+    } else {
+      configWindow.loadFile(join(__dirname, '../renderer/config.html'))
+    }
+  }
 
   const showSearchWindow = (): void => {
     // 重新居中窗口
@@ -67,13 +167,10 @@ function createWindow(): void {
     const maxHeight = 500
     const minHeight = 80
 
-    // 限制高度在合理范围内
     const clampedHeight = Math.max(minHeight, Math.min(maxHeight, newHeight))
-    console.log('### sssize', newHeight, clampedHeight)
 
     searchWindow.setSize(currentWidth, clampedHeight)
 
-    // 保持窗口居中
     const { width: currentScreenWidth } = screen.getPrimaryDisplay().workAreaSize
     searchWindow.setPosition(
       Math.round((currentScreenWidth - currentWidth) / 2),
@@ -81,20 +178,52 @@ function createWindow(): void {
     )
   })
 
+  ipcMain.on('open-config-window', () => {
+    createConfigWindow()
+  })
+
+  const configDir = join(homedir(), '.zapgo')
+  const configPath = join(configDir, 'config.json')
+  const ensureConfigDir = async (): Promise<void> => {
+    try {
+      await fs.mkdir(configDir, { recursive: true })
+    } catch (error) {
+      console.error('Failed to create config directory:', error)
+    }
+  }
+
+  ipcMain.handle('load-config', async () => {
+    try {
+      await ensureConfigDir()
+      const data = await fs.readFile(configPath, 'utf-8')
+      return JSON.parse(data)
+    } catch (error) {
+      console.log('Config file not found or invalid, using default config', error)
+      return null
+    }
+  })
+
+  ipcMain.handle('save-config', async (_, config) => {
+    try {
+      await ensureConfigDir()
+      await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8')
+      return true
+    } catch (error) {
+      console.error('Failed to save config:', error)
+      return false
+    }
+  })
+
   searchWindow.on('ready-to-show', () => {
+    // 创建系统托盘
+    createTray()
+
     const toggleShortcutKeys = process.platform === 'darwin' ? 'Option+Space' : 'Alt+Space'
-    const hideShortcutKeys = 'Escape'
 
     const toggleSearchShortcut = globalShortcut.register(toggleShortcutKeys, () => {
       setTimeout(() => {
         toggleSearchWindow()
       }, 0)
-    })
-
-    const hideSearchShortcut = globalShortcut.register(hideShortcutKeys, () => {
-      if (searchWindow.isFocused()) {
-        hideSearchWindow()
-      }
     })
 
     if (!toggleSearchShortcut) {
@@ -103,17 +232,29 @@ function createWindow(): void {
       )
     }
 
-    if (!hideSearchShortcut) {
-      console.error(
-        `[Shortcut Registration Failed] Hide search window shortcut not registered: ${hideShortcutKeys}`
-      )
-    }
     if (!app.isPackaged) {
       searchWindow.webContents.openDevTools({ mode: 'detach' })
     }
   })
 
-  searchWindow.on('blur', () => hideSearchWindow())
+  searchWindow.on('focus', () => {
+    const hideShortcutKeys = 'Escape'
+    const hideSearchShortcut = globalShortcut.register(hideShortcutKeys, () => {
+      hideSearchWindow()
+    })
+
+    if (!hideSearchShortcut) {
+      console.error(
+        `[Shortcut Registration Failed] Hide search window shortcut not registered: ${hideShortcutKeys}`
+      )
+    }
+  })
+
+  // 在搜索窗口失去焦点时取消注册 Escape 快捷键
+  searchWindow.on('blur', () => {
+    globalShortcut.unregister('Escape')
+    hideSearchWindow()
+  })
 
   searchWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -143,15 +284,12 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
-  createWindow()
+  createSearchWindow()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createSearchWindow()
   })
 })
 
@@ -162,6 +300,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  globalShortcut.unregisterAll()
 })
 
 // In this file you can include the rest of your app's specific main process

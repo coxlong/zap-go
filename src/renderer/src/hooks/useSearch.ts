@@ -3,11 +3,9 @@ import { Command, SuggestionItem, ExecutionResult } from '../plugins/types'
 import { commandManager } from '../plugins/manager'
 
 export interface UseSearchReturn {
-  // 状态
   inputValue: string
   setInputValue: (value: string) => void
   autoSuggestion: string
-  suggestionDisplayText: string
   suggestions: SuggestionItem[]
   selectedSuggestionIndex: number
   setSelectedSuggestionIndex: (index: number) => void
@@ -18,7 +16,6 @@ export interface UseSearchReturn {
   paramHints: string[]
   currentParamIndex: number
 
-  // 方法
   clearInput: () => void
   processInput: (value: string) => void
   executeCommand: () => Promise<void>
@@ -28,10 +25,8 @@ export interface UseSearchReturn {
 }
 
 export const useSearch = (): UseSearchReturn => {
-  // 状态定义
   const [inputValue, setInputValue] = useState('')
   const [autoSuggestion, setAutoSuggestion] = useState('')
-  const [suggestionDisplayText, setSuggestionDisplayText] = useState('')
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([])
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -43,12 +38,10 @@ export const useSearch = (): UseSearchReturn => {
 
   const debounceTimerRef = useRef<number | undefined>(undefined)
 
-  // 工具函数
   const clearAllStates = useCallback(() => {
     setCurrentCommand(null)
     setShowSuggestions(false)
     setAutoSuggestion('')
-    setSuggestionDisplayText('')
     setSelectedSuggestionIndex(-1)
     setParamHints([])
     setCurrentParamIndex(-1)
@@ -71,62 +64,51 @@ export const useSearch = (): UseSearchReturn => {
     setShowResults(true)
   }, [])
 
-  // 显示命令建议
   const showCommandSuggestions = useCallback((input: string) => {
-    const trigger = input.toLowerCase()
     const commands = commandManager.getCommands()
-    const matchedCommands = commands.filter((command) =>
-      command.triggers.some((t) => t.toLowerCase().includes(trigger))
+
+    const sortedCommands = commands.filter((command) =>
+      command.triggers.some((trigger) => trigger.toLowerCase().includes(input.toLowerCase()))
     )
+
     setSuggestions(
-      matchedCommands.map((command) => ({
-        type: 'command',
-        command
+      sortedCommands.map((command) => ({
+        command,
+        value: command.triggers[0],
+        canExecute: command.canExecute(command.triggers[0])
       }))
     )
-    setShowSuggestions(matchedCommands.length > 0)
-    setSelectedSuggestionIndex(matchedCommands.length > 0 ? 0 : -1)
+    setShowSuggestions(sortedCommands.length > 0)
+    setSelectedSuggestionIndex(sortedCommands.length > 0 ? 0 : -1)
   }, [])
 
-  // 显示参数建议
   const showParamSuggestions = useCallback((input: string, command: Command | null) => {
     if (!command) {
-      setShowSuggestions(false)
       return
     }
 
-    const parts = input.split(/\s+/)
-    const currentParam = parts[parts.length - 1] || ''
-    const paramIndex = parts.length - 2
-    const paramDef = command.params[paramIndex]
+    const matchedSuggestions = [input]
 
-    if (!paramDef || !paramDef.suggestions) {
-      setShowSuggestions(false)
-      return
-    }
-
-    const matchedSuggestions = paramDef.suggestions.filter((sug) =>
-      sug.toLowerCase().includes(currentParam.toLowerCase())
-    )
     setSuggestions(
       matchedSuggestions.map((value) => ({
-        type: 'param',
+        command,
         value,
-        paramName: paramDef.name
+        canExecute: command.canExecute(value)
       }))
     )
     setShowSuggestions(matchedSuggestions.length > 0)
     setSelectedSuggestionIndex(matchedSuggestions.length > 0 ? 0 : -1)
   }, [])
 
-  // 更新自动补全
   const updateAutoSuggestion = useCallback((input: string, command: Command | null) => {
     const parts = input.trim().split(/\s+/)
     const currentTrigger = parts[0].toLowerCase()
-    const commands = commandManager.getCommands()
 
-    if (parts.length === 1 && currentTrigger.length > 0) {
-      // 命令自动补全
+    const suggestParams =
+      command === null ? false : command.triggers.some((t) => t.toLowerCase() === currentTrigger)
+
+    if (!suggestParams && currentTrigger.length > 0) {
+      const commands = commandManager.getCommands()
       const bestMatch = commands.find((c) =>
         c.triggers.some(
           (t) => t.toLowerCase().startsWith(currentTrigger) && t.toLowerCase() !== currentTrigger
@@ -138,17 +120,14 @@ export const useSearch = (): UseSearchReturn => {
         )
         if (matchedTrigger) {
           setAutoSuggestion(matchedTrigger.substring(currentTrigger.length))
-          setSuggestionDisplayText(matchedTrigger)
           return
         }
       }
     }
-
-    if (parts.length > 1 && command) {
-      // 参数自动补全
+    if (suggestParams && command) {
       const currentParam = parts[parts.length - 1]
       const paramIndex = parts.length - 2
-      const paramDef = command.params[paramIndex]
+      const paramDef = command.plugin.params[paramIndex]
 
       if (paramDef && paramDef.suggestions) {
         const matchedSuggestion = paramDef.suggestions.find((sug) =>
@@ -156,19 +135,17 @@ export const useSearch = (): UseSearchReturn => {
         )
         if (matchedSuggestion && matchedSuggestion !== currentParam) {
           setAutoSuggestion(matchedSuggestion.substring(currentParam.length))
-          setSuggestionDisplayText(matchedSuggestion)
           return
         }
       }
     }
 
     setAutoSuggestion('')
-    setSuggestionDisplayText('')
   }, [])
 
   // 更新参数提示
   const updateParamHints = useCallback((input: string, command: Command | null) => {
-    if (!command || !command.params.length) {
+    if (!command || !command.plugin.params.length) {
       setParamHints([])
       setCurrentParamIndex(-1)
       return
@@ -176,52 +153,50 @@ export const useSearch = (): UseSearchReturn => {
 
     const parts = input.trim().split(/\s+/)
     if (parts.length <= 1) {
-      // 刚输入命令，显示所有参数
-      setParamHints(command.params.map((p) => `<${p.name}>`))
+      setParamHints(command.plugin.params.map((p) => `<${p.name}>`))
       setCurrentParamIndex(0)
     } else {
-      // 已经在输入参数
       const inputParamCount = parts.length - 1
-      const remainingParams = command.params.slice(inputParamCount)
+      const remainingParams = command.plugin.params.slice(inputParamCount)
       setParamHints(remainingParams.map((p) => `<${p.name}>`))
-      setCurrentParamIndex(inputParamCount < command.params.length ? 0 : -1)
+      setCurrentParamIndex(inputParamCount < command.plugin.params.length ? 0 : -1)
     }
   }, [])
 
-  // 处理输入
   const processInput = useCallback(
     (value: string) => {
-      const command = commandManager.findMatchingCommand(value)
+      const { command, type } = commandManager.findMatchingCommand(value)
       setCurrentCommand(command)
 
-      updateParamHints(value, command)
-
-      const parts = value.split(' ')
-      if (parts.length === 1) {
+      if (type === 'exactMatch') {
+        updateParamHints(value, command)
+        showParamSuggestions(value, command)
+        updateAutoSuggestion(value, command)
+      } else if (type === 'prefixMatch') {
         showCommandSuggestions(value)
-      } else {
+        updateAutoSuggestion(value, command)
+      } else if (type === 'fallback') {
         showParamSuggestions(value, command)
       }
-
-      updateAutoSuggestion(value, command)
     },
     [updateParamHints, showCommandSuggestions, showParamSuggestions, updateAutoSuggestion]
   )
 
-  // 接受自动补全
   const acceptAutoSuggestion = useCallback(() => {
     if (!autoSuggestion) return
-    const newValue = inputValue + autoSuggestion
+    let newValue = inputValue + autoSuggestion
+    const canExecute = currentCommand?.canExecute(newValue)
+    if (canExecute !== true) {
+      newValue += ' '
+    }
     setInputValue(newValue)
     setAutoSuggestion('')
-    setSuggestionDisplayText('')
 
     setTimeout(() => {
       processInput(newValue)
     }, 0)
-  }, [autoSuggestion, inputValue, processInput])
+  }, [autoSuggestion, inputValue, processInput, currentCommand])
 
-  // 导航建议
   const navigateSuggestions = useCallback(
     (direction: number) => {
       const count = suggestions.length
@@ -230,23 +205,6 @@ export const useSearch = (): UseSearchReturn => {
     [suggestions.length]
   )
 
-  // 选择建议
-  const selectSuggestion = useCallback(() => {
-    if (selectedSuggestionIndex === -1 || !suggestions[selectedSuggestionIndex]) return
-
-    const suggestion = suggestions[selectedSuggestionIndex]
-    if (suggestion.type === 'command' && suggestion.command) {
-      setInputValue(suggestion.command.triggers[0] + ' ')
-    } else if (suggestion.type === 'param' && suggestion.value) {
-      const parts = inputValue.split(/\s+/)
-      const newParts = [...parts.slice(0, -1), suggestion.value]
-      setInputValue(newParts.join(' ') + ' ')
-    }
-
-    setShowSuggestions(false)
-  }, [selectedSuggestionIndex, suggestions, inputValue])
-
-  // 执行命令
   const executeCommand = useCallback(async () => {
     const input = inputValue.trim()
     if (!input) return
@@ -273,11 +231,26 @@ export const useSearch = (): UseSearchReturn => {
     clearInput()
   }, [inputValue, currentCommand, addResult, clearInput])
 
+  const selectSuggestion = useCallback(() => {
+    if (selectedSuggestionIndex === -1 || !suggestions[selectedSuggestionIndex]) return
+
+    const suggestion = suggestions[selectedSuggestionIndex]
+
+    setInputValue(suggestion.value)
+
+    if (suggestion.canExecute) {
+      setTimeout(() => {
+        executeCommand()
+      }, 0)
+    }
+
+    setShowSuggestions(false)
+  }, [selectedSuggestionIndex, suggestions, executeCommand])
+
   return {
     inputValue,
     setInputValue,
     autoSuggestion,
-    suggestionDisplayText,
     suggestions,
     selectedSuggestionIndex,
     setSelectedSuggestionIndex,

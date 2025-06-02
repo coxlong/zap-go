@@ -7,19 +7,21 @@ export interface Plugin {
   icon: string
   parseInput(input: string): ParsedInput
   execute(input: string): Promise<ExecutionResult>
+  canExecute?(input: string): boolean
+  setConfigParams?(config: Record<string, string> | undefined): void
+  getConfigParams?(): string[]
 }
 
-// 新增 Command 接口
 export interface Command {
   id: string
   name: string
   description: string
   triggers: string[]
-  params: PluginParam[]
   icon: string
   plugin: Plugin
   parseInput(input: string): ParsedInput
   execute(input: string): Promise<ExecutionResult>
+  canExecute(input: string): boolean
 }
 
 export interface PluginParam {
@@ -56,13 +58,31 @@ export interface ExecutionResult {
 }
 
 export interface SuggestionItem {
-  type: 'command' | 'param'
-  command?: Command
-  value?: string
-  paramName?: string
+  command: Command
+  value: string
+  canExecute: boolean
 }
 
-// 基础插件类
+export interface CommandConfig {
+  id: string
+  pluginId: string
+  enabled: boolean
+  triggers: string[]
+  name?: string
+  description?: string
+  icon?: string
+  pluginParams?: Record<string, string>
+}
+
+export interface PluginRegistry {
+  [key: string]: {
+    name: string
+    description: string
+    createPlugin: () => Plugin
+    configurable: boolean // 是否支持自定义配置
+  }
+}
+
 export class BasePlugin implements Plugin {
   id: string
   name: string
@@ -70,6 +90,7 @@ export class BasePlugin implements Plugin {
   triggers: string[]
   params: PluginParam[]
   icon: string
+  pluginParams: Record<string, string>
 
   constructor(config: {
     name: string
@@ -77,12 +98,14 @@ export class BasePlugin implements Plugin {
     triggers: string[]
     params?: PluginParam[]
     icon?: string
+    pluginParams?: Record<string, string>
   }) {
     this.name = config.name
     this.description = config.description
     this.triggers = config.triggers
     this.params = config.params || []
     this.icon = config.icon || '⚡'
+    this.pluginParams = config.pluginParams || {}
     this.id = Math.random().toString(36).substring(7)
   }
 
@@ -151,15 +174,18 @@ export class BasePlugin implements Plugin {
   async execute(_: string): Promise<ExecutionResult> {
     throw new Error('插件需要实现 execute 方法')
   }
+
+  getConfigParams?(): string[] {
+    // 子类可以重写此方法返回支持的配置参数
+    return []
+  }
 }
 
-// 新增基础命令类
 export class BaseCommand implements Command {
   id: string
   name: string
   description: string
   triggers: string[]
-  params: PluginParam[]
   icon: string
   plugin: Plugin
 
@@ -169,16 +195,18 @@ export class BaseCommand implements Command {
       name?: string
       description?: string
       triggers: string[]
-      params?: PluginParam[]
       icon?: string
+      pluginParams?: Record<string, string>
     }
   ) {
     this.plugin = plugin
     this.name = config.name || plugin.name
     this.description = config.description || plugin.description
     this.triggers = config.triggers
-    this.params = config.params || plugin.params
     this.icon = config.icon || plugin.icon
+
+    plugin.setConfigParams?.(config.pluginParams)
+
     this.id = Math.random().toString(36).substring(7)
   }
 
@@ -188,5 +216,13 @@ export class BaseCommand implements Command {
 
   async execute(input: string): Promise<ExecutionResult> {
     return this.plugin.execute(input)
+  }
+
+  canExecute(input: string): boolean {
+    if (this.plugin.canExecute) {
+      return this.plugin.canExecute(input)
+    }
+
+    return false
   }
 }
