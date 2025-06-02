@@ -119,17 +119,37 @@ function createSearchWindow(): void {
 
     configWindow.on('ready-to-show', () => {
       configWindow?.show()
-      if (!app.isPackaged) {
-        configWindow?.webContents.openDevTools({ mode: 'detach' })
+    })
+
+    configWindow.on('focus', () => {
+      const devToolsShortcut = globalShortcut.register('F12', () => {
+        if (configWindow && configWindow.webContents) {
+          if (configWindow.webContents.isDevToolsOpened()) {
+            configWindow.webContents.closeDevTools()
+          } else {
+            configWindow.webContents.openDevTools({ mode: 'detach' })
+          }
+        }
+      })
+
+      if (!devToolsShortcut) {
+        console.error(
+          '[Shortcut Registration Failed] F12 shortcut not registered for config window'
+        )
       }
     })
 
+    configWindow.on('blur', () => {
+      globalShortcut.unregister('F12')
+    })
+
     configWindow.on('closed', () => {
+      globalShortcut.unregister('F12')
       configWindow = null
     })
 
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-      configWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/config`)
+      configWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/config.html`)
     } else {
       configWindow.loadFile(join(__dirname, '../renderer/config.html'))
     }
